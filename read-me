@@ -1,0 +1,518 @@
+1- mainactivity
+
+package com.austin.kjetpos
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import com.austin.kjetpos.printer.BarcodeScannerScreen
+import com.austin.kjetpos.ui.theme.SunmiPrinterTheme
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            SunmiPrinterTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    BarcodeScannerScreen()
+                }
+            }
+        }
+    }
+}
+
+
+2- barcode scannerscreen
+
+package com.austin.kjetpos.printer
+
+import android.Manifest
+import android.content.Context
+import android.media.MediaPlayer
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.util.Log
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import com.google.mlkit.vision.barcode.BarcodeScanner
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun BarcodeScannerScreen() {
+    val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+
+    if (cameraPermissionState.status.isGranted) {
+        CameraPreview()
+    } else {
+        RequestCameraPermission(
+            onPermissionGranted = { cameraPermissionState.launchPermissionRequest() }
+        )
+    }
+}
+
+@Composable
+fun RequestCameraPermission(onPermissionGranted: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Permissão da Câmera Necessária",
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        Text(
+            text = "Para escanear códigos de barras, é necessário conceder acesso à câmera.",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+
+        Button(
+            onClick = onPermissionGranted,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Conceder Permissão")
+        }
+    }
+}
+
+@Composable
+fun CameraPreview() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    var flashEnabled by remember { mutableStateOf(false) }
+    var scannedCode by remember { mutableStateOf<String?>(null) }
+    var codeType by remember { mutableStateOf<String?>(null) }
+    var isScanning by remember { mutableStateOf(true) }
+
+    val previewView = remember { PreviewView(context) }
+
+    LaunchedEffect(Unit) {
+        startCamera(
+            context = context,
+            lifecycleOwner = lifecycleOwner,
+            previewView = previewView,
+            cameraExecutor = cameraExecutor,
+            onCameraReady = { cam -> camera = cam },
+            onBarcodeScanned = { code, type ->
+                if (isScanning) {
+                    scannedCode = code
+                    codeType = type
+                    isScanning = false
+
+                    // Som e vibração
+                    playBeepSound(context)
+                    vibrateDevice(context)
+
+                    Log.i("BarcodeScanner", "Tipo: $type, Código: $code")
+                }
+            }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            cameraExecutor.shutdown()
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Preview da câmera
+        AndroidView(
+            factory = { previewView },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Overlay com área de escaneamento
+        ScannerOverlay()
+
+        // Controles superiores
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .align(Alignment.TopEnd),
+            horizontalArrangement = Arrangement.End
+        ) {
+            // Botão do flash
+            IconButton(
+                onClick = {
+                    camera?.let {
+                        flashEnabled = !flashEnabled
+                        it.cameraControl.enableTorch(flashEnabled)
+                    }
+                },
+                modifier = Modifier
+                    .background(
+                        Color.Black.copy(alpha = 0.5f),
+                        RoundedCornerShape(8.dp)
+                    )
+            ) {
+                Icon(
+                    imageVector = if (flashEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                    contentDescription = if (flashEnabled) "Desligar Flash" else "Ligar Flash",
+                    tint = Color.White
+                )
+            }
+        }
+
+        // Resultado do escaneamento
+        scannedCode?.let { code ->
+            ScanResultCard(
+                code = code,
+                type = codeType ?: "Desconhecido",
+                onDismiss = {
+                    scannedCode = null
+                    codeType = null
+                    isScanning = true
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
+        // Instruções
+        if (scannedCode == null) {
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.Black.copy(alpha = 0.7f)
+                )
+            ) {
+                Text(
+                    text = "Aponte a câmera para o código de barras",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ScannerOverlay() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.3f))
+    ) {
+        // Área de escaneamento
+        Box(
+            modifier = Modifier
+                .size(250.dp)
+                .align(Alignment.Center)
+                .background(Color.Transparent)
+                .clip(RoundedCornerShape(12.dp))
+        ) {
+            // Cantos da área de escaneamento
+            ScannerCorners()
+        }
+    }
+}
+
+@Composable
+fun BoxScope.ScannerCorners() {
+    val cornerLength = 30.dp
+    val cornerWidth = 4.dp
+
+    // Canto superior esquerdo
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .size(cornerLength, cornerWidth)
+            .background(Color.White)
+    )
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .size(cornerWidth, cornerLength)
+            .background(Color.White)
+    )
+
+    // Canto superior direito
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .size(cornerLength, cornerWidth)
+            .background(Color.White)
+    )
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .size(cornerWidth, cornerLength)
+            .background(Color.White)
+    )
+
+    // Canto inferior esquerdo
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .size(cornerLength, cornerWidth)
+            .background(Color.White)
+    )
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .size(cornerWidth, cornerLength)
+            .background(Color.White)
+    )
+
+    // Canto inferior direito
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .size(cornerLength, cornerWidth)
+            .background(Color.White)
+    )
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .size(cornerWidth, cornerLength)
+            .background(Color.White)
+    )
+}
+
+@Composable
+fun ScanResultCard(
+    code: String,
+    type: String,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Código Escaneado!",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Tipo: $type",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Valor: $code",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Escanear Novamente")
+                }
+            }
+        }
+    }
+}
+
+private fun startCamera(
+    context: Context,
+    lifecycleOwner: LifecycleOwner,
+    previewView: PreviewView,
+    cameraExecutor: ExecutorService,
+    onCameraReady: (Camera) -> Unit,
+    onBarcodeScanned: (String, String) -> Unit
+) {
+    val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+
+    cameraProviderFuture.addListener({
+        val cameraProvider = cameraProviderFuture.get()
+
+        val preview = Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
+
+        val imageAnalyzer = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+            .also {
+                it.setAnalyzer(cameraExecutor, BarcodeAnalyzer(onBarcodeScanned))
+            }
+
+        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+        try {
+            cameraProvider.unbindAll()
+            val camera = cameraProvider.bindToLifecycle(
+                lifecycleOwner,
+                cameraSelector,
+                preview,
+                imageAnalyzer
+            )
+            onCameraReady(camera)
+        } catch (exc: Exception) {
+            Log.e("CameraX", "Use case binding failed", exc)
+        }
+    }, ContextCompat.getMainExecutor(context))
+}
+
+private class BarcodeAnalyzer(
+    private val onBarcodeScanned: (String, String) -> Unit
+) : ImageAnalysis.Analyzer {
+
+    private val scanner: BarcodeScanner = BarcodeScanning.getClient(
+        BarcodeScannerOptions.Builder()
+            .setBarcodeFormats(
+                Barcode.FORMAT_QR_CODE,
+                Barcode.FORMAT_EAN_13,
+                Barcode.FORMAT_EAN_8,
+                Barcode.FORMAT_UPC_A,
+                Barcode.FORMAT_UPC_E,
+                Barcode.FORMAT_CODE_128,
+                Barcode.FORMAT_CODE_39,
+                Barcode.FORMAT_CODE_93,
+                Barcode.FORMAT_CODABAR,
+                Barcode.FORMAT_PDF417,
+                Barcode.FORMAT_DATA_MATRIX,
+                Barcode.FORMAT_AZTEC
+            )
+            .build()
+    )
+
+    @androidx.annotation.OptIn(ExperimentalGetImage::class)
+    override fun analyze(imageProxy: ImageProxy) {
+        val mediaImage = imageProxy.image
+        if (mediaImage != null) {
+            val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+
+            scanner.process(image)
+                .addOnSuccessListener { barcodes ->
+                    for (barcode in barcodes) {
+                        val rawValue = barcode.rawValue
+                        val format = getBarcodeFormat(barcode.format)
+                        if (rawValue != null) {
+                            onBarcodeScanned(rawValue, format)
+                        }
+                    }
+                }
+                .addOnFailureListener {
+                    Log.e("BarcodeAnalyzer", "Barcode analysis failed", it)
+                }
+                .addOnCompleteListener {
+                    imageProxy.close()
+                }
+        }
+    }
+
+    private fun getBarcodeFormat(format: Int): String {
+        return when (format) {
+            Barcode.FORMAT_QR_CODE -> "QR Code"
+            Barcode.FORMAT_EAN_13 -> "EAN-13"
+            Barcode.FORMAT_EAN_8 -> "EAN-8"
+            Barcode.FORMAT_UPC_A -> "UPC-A"
+            Barcode.FORMAT_UPC_E -> "UPC-E"
+            Barcode.FORMAT_CODE_128 -> "Code 128"
+            Barcode.FORMAT_CODE_39 -> "Code 39"
+            Barcode.FORMAT_CODE_93 -> "Code 93"
+            Barcode.FORMAT_CODABAR -> "Codabar"
+            Barcode.FORMAT_PDF417 -> "PDF417"
+            Barcode.FORMAT_DATA_MATRIX -> "Data Matrix"
+            Barcode.FORMAT_AZTEC -> "Aztec"
+            else -> "Desconhecido"
+        }
+    }
+}
+
+private fun playBeepSound(context: Context) {
+    try {
+        // Usando ToneGenerator para criar um beep programaticamente
+        val toneGenerator = android.media.ToneGenerator(
+            android.media.AudioManager.STREAM_NOTIFICATION,
+            100
+        )
+        toneGenerator.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 200)
+
+        // Liberar recursos após um delay
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            toneGenerator.release()
+        }, 300)
+    } catch (e: Exception) {
+        Log.e("SoundPlayer", "Error playing beep sound", e)
+    }
+}
+
+private fun vibrateDevice(context: Context) {
+    try {
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(100)
+        }
+    } catch (e: Exception) {
+        Log.e("Vibrator", "Error vibrating device", e)
+    }
+}
+
