@@ -1,4 +1,4 @@
-1- mainactivity
+1- mainActivity
 
 package com.austin.kjetpos
 import android.os.Bundle
