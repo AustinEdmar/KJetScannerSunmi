@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
             // Configuração baseada no SDK fornecido
             val intent = Intent("com.summi.scan")
 
-            // Configurações de som e vibração
+            // Configurações de som e vibrato
             intent.putExtra("PLAY_SOUND", true) // Som após completar o scan
             intent.putExtra("PLAY_VIBRATE", false) // Vibração (suportado no M1, não no V1)
 

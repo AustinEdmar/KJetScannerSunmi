@@ -1,4 +1,86 @@
-1 - MainActivity
+## 1- AndroidManisfest.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+
+
+    <!-- Permissões necessárias para o scanner -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Permissões para impressora Sunmi -->
+    <uses-permission android:name="com.sunmi.permission.PRINTER_SERVICE" />
+    <uses-permission android:name="com.sunmi.permission.SCANNER_SERVICE" />
+
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="com.sunmi.permission.SCANNER" />
+
+    <uses-permission android:name="com.sunmi.permission.PRINTER" />
+   
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+    <!-- Características de hardware -->
+    <!-- Adicione se necessário para o SDK da Sunmi -->
+    <queries>
+        <intent>
+            <action android:name="com.summi.scan" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.KJetPos"
+        tools:targetApi="31">
+
+        <activity
+            android:name="MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.KJetPos"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
+
+
+## 2- build.gradle.kts app
+
+implementation("com.sunmi:printerlibrary:1.0.24")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
+    implementation("androidx.camera:camera-extensions:1.3.1")
+    // ML Kit para reconhecimento de códigos de barras
+
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.camera:camera-core:1.3.1")
+    implementation("androidx.compose.material:material-icons-extended:1.5.8")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation(libs.printerlibrary)
+
+## 3 - MainActivity.kt
 
 package com.austin.kjetScanner
 
@@ -119,35 +201,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-2 - ScanResultManager.kt
-
-package com.austin.kjetScanner.printer
-
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-
-object ScanResultManager {
-    private val _scanResult = MutableStateFlow<ScanResult?>(null)
-    val scanResult: StateFlow<ScanResult?> = _scanResult
-
-    fun updateScanResult(type: String, value: String) {
-        _scanResult.value = ScanResult(type, value, System.currentTimeMillis())
-    }
-
-    fun clearScanResult() {
-        _scanResult.value = null
-    }
-}
-
-data class ScanResult(
-    val type: String,
-    val value: String,
-    val timestamp: Long
-)
-
-
-3 - SunmiBarcodeScannerScreen.kt
-
+## 4- BarcodeScannerScreen.kt
 package com.austin.kjetScanner.printer
 
 import androidx.compose.foundation.background
@@ -454,88 +508,75 @@ fun SupportedFormatsInfo(
     }
 }
 
+### 5- ScanResultManager.kt
 
-4 - Androidmanifest.xml
+package com.austin.kjetScanner.printer
 
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
+object ScanResultManager {
+    private val _scanResult = MutableStateFlow<ScanResult?>(null)
+    val scanResult: StateFlow<ScanResult?> = _scanResult
 
+    fun updateScanResult(type: String, value: String) {
+        _scanResult.value = ScanResult(type, value, System.currentTimeMillis())
+    }
 
-    <!-- Permissões necessárias para o scanner -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.VIBRATE" />
+    fun clearScanResult() {
+        _scanResult.value = null
+    }
+}
 
-    <!-- Permissões para impressora Sunmi -->
-    <uses-permission android:name="com.sunmi.permission.PRINTER_SERVICE" />
-    <uses-permission android:name="com.sunmi.permission.SCANNER_SERVICE" />
-
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="com.sunmi.permission.SCANNER" />
-
-    <uses-permission android:name="com.sunmi.permission.PRINTER" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="true" />
-    <uses-feature
-        android:name="android.hardware.camera.autofocus"
-        android:required="false" />
-    <!-- Características de hardware -->
-    <!-- Adicione se necessário para o SDK da Sunmi -->
-    <queries>
-        <intent>
-            <action android:name="com.summi.scan" />
-        </intent>
-    </queries>
-
-    <application
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.KJetPos"
-        tools:targetApi="31">
-
-        <activity
-            android:name="MainActivity"
-            android:exported="true"
-            android:theme="@style/Theme.KJetPos"
-            tools:ignore="MissingClass">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-    </application>
-
-</manifest>
-
-
-5 - dependencies buil.gradle (Module: app)
- implementation("com.sunmi:printerlibrary:1.0.24")
-    implementation("androidx.camera:camera-camera2:1.3.1")
-    implementation("androidx.camera:camera-lifecycle:1.3.1")
-    implementation("androidx.camera:camera-view:1.3.1")
-    implementation("androidx.camera:camera-extensions:1.3.1")
-    // ML Kit para reconhecimento de códigos de barras
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
-    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    implementation("androidx.camera:camera-core:1.3.1")
-    implementation("androidx.compose.material:material-icons-extended:1.5.8")
-    implementation("androidx.camera:camera-camera2:1.3.1")
+data class ScanResult(
+    val type: String,
+    val value: String,
+    val timestamp: Long
+)
 
 
 
+### 6- theme.kt
+package com.austin.kjetScanner.ui.theme
 
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+
+
+
+import androidx.compose.material3.*
+
+
+private val LightColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF6200EE),
+    secondary = androidx.compose.ui.graphics.Color(0xFF03DAC6),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF018786)
+)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFFBB86FC),
+    secondary = androidx.compose.ui.graphics.Color(0xFF03DAC6),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF018786)
+)
+
+@Composable
+fun SunmiPrinterTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when {
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography(),
+        content = content
+    )
+}
